@@ -1,7 +1,10 @@
 import React from 'react';
-import { Grid, Card, CardContent, Typography, Box, Tooltip, Divider, Chip } from '@mui/material';
-import { CheckCircle, XCircle, AlertTriangle, Clock, Bug, SkipForward, Play, Code, GitBranch, Package, Database, BarChart } from 'lucide-react';
+import { Card, CardContent, Typography, Box, Tooltip, Divider, Chip } from '@mui/material';
+import Grid from '@mui/material/Grid';
+import { GridProps } from '@mui/material/Grid';
+import { CheckCircle, XCircle, AlertTriangle, Clock, Bug, SkipForward, GitBranch, Package, Database } from 'lucide-react';
 import { ResultsProps, TestResult } from './types';
+import type { GridProps } from '@mui/material/Grid';
 
 const StatusBox: React.FC<{ 
   label: string;
@@ -50,7 +53,7 @@ const ResultCard: React.FC<{ result: TestResult }> = ({ result }) => {
           boxShadow: 6,
           transition: 'box-shadow 0.3s ease-in-out'
         },
-        maxWidth: '600px',
+        maxWidth: '100%',
         margin: '0 auto'
       }}
     >
@@ -61,7 +64,7 @@ const ResultCard: React.FC<{ result: TestResult }> = ({ result }) => {
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
               <Database className="mr-2 text-blue-600" size={20} />
               <Typography variant="h6" sx={{ color: 'primary.main' }}>
-                dashboard-service
+                {result.serviceName || result.moduleName}
               </Typography>
             </Box>
             
