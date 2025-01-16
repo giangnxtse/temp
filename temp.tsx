@@ -1,47 +1,78 @@
 import React from 'react';
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  List,
-  Pagination,
-  Box,
-  Typography,
-} from '@mui/material';
-import { TestResult } from '../types/TestResult';
-import { TestResultItem } from './TestResultItem';
-import usePagination from '../hooks/usePagination';
+import { ListItem, ListItemText, Chip, IconButton, Tooltip, Box } from '@mui/material';
+import { Assignment, CheckCircle, Cancel, HourglassEmpty, BugReport, OpenInNew } from '@mui/icons-material';
+import { TestResult, TestStatus } from '../types/TestResult';
 
-interface TestResultPopupProps {
-  open: boolean;
-  onClose: () => void;
-  results: TestResult[];
+const getStatusColor = (status: TestStatus): string => {
+  switch (status) {
+    case 'Passed':
+      return 'success';
+    case 'Failed':
+      return 'error';
+    case 'Skipped':
+      return 'warning';
+    default:
+      return 'info';
+  }
+};
+
+const getStatusIcon = (status: TestStatus) => {
+  switch (status) {
+    case 'Passed':
+      return <CheckCircle />;
+    case 'Failed':
+      return <Cancel />;
+    case 'Skipped':
+      return <HourglassEmpty />;
+    default:
+      return <BugReport />;
+  }
+};
+
+interface TestResultItemProps {
+  result: TestResult;
 }
 
-export const TestResultPopup: React.FC<TestResultPopupProps> = ({ open, onClose, results }) => {
-  const { paginatedItems, currentPage, totalPages, nextPage, prevPage } = usePagination(results, 10);
-
+export const TestResultItem: React.FC<TestResultItemProps> = ({ result }) => {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-      <DialogTitle>Test Results</DialogTitle>
-      <DialogContent>
-        <List sx={{ minHeight: '300px', maxHeight: '500px', overflow: 'auto' }}>
-          {paginatedItems.map((result) => (
-            <TestResultItem key={result.testId} result={result} />
-          ))}
-        </List>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
-          <Typography variant="body2">
-            Showing {(currentPage - 1) * 10 + 1} - {Math.min(currentPage * 10, results.length)} of {results.length} results
-          </Typography>
-          <Pagination
-            count={totalPages}
-            page={currentPage}
-            onChange={(_, page) => page > currentPage ? nextPage() : prevPage()}
-          />
-        </Box>
-      </DialogContent>
-    </Dialog>
+    <ListItem
+      divider
+      secondaryAction={
+        <Tooltip title="Open test details">
+          <IconButton edge="end" aria-label="open test details" href={result.link} target="_blank">
+            <OpenInNew />
+          </IconButton>
+        </Tooltip>
+      }
+    >
+      <ListItemText
+        primary={
+          <Box display="flex" alignItems="center" gap={1}>
+            <Tooltip title={result.testId}>
+              <span>{result.testId.slice(0, 20)}...</span>
+            </Tooltip>
+            <Chip
+              icon={getStatusIcon(result.status)}
+              label={result.status}
+              color={getStatusColor(result.status) as "success" | "error" | "warning" | "info"}
+              size="small"
+            />
+          </Box>
+        }
+        secondary={
+          <Box display="flex" flexDirection="column" gap={0.5}>
+            <Tooltip title={result.name}>
+              <span>{result.name.slice(0, 30)}...</span>
+            </Tooltip>
+            <Box display="flex" alignItems="center" gap={1}>
+              <Chip icon={<Assignment />} label={result.requirement} size="small" variant="outlined" />
+              <Chip label={result.type} size="small" variant="outlined" />
+              <Chip label={result.manual ? 'Manual' : 'Automated'} size="small" variant="outlined" />
+            </Box>
+          </Box>
+        }
+      />
+    </ListItem>
   );
 };
 
