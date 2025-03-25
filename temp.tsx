@@ -1,9 +1,37 @@
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+group = 'com.example'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation gradleApi() // Gradle API for plugin development
+    implementation 'io.qameta.allure:io.qameta.allure.gradle.plugin:2.12.0' // Allure Gradle plugin
+    implementation 'io.qameta.allure:allure-junit5:2.30.0' // Allure JUnit 5 integration
+    implementation 'org.junit.jupiter:junit-jupiter-api:5.10.2' // Latest JUnit API
+    implementation 'org.junit.jupiter:junit-jupiter-engine:5.10.2' // Latest JUnit Engine
+    implementation 'org.junit.platform:junit-platform-launcher:1.10.2' // JUnit Platform
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}
+
 package com.example;
 
 import io.qameta.allure.Allure;
 import io.qameta.allure.AllureLifecycle;
 import io.qameta.allure.model.Parameter;
-import io.qameta.allure.model.TestResult;
 import org.junit.platform.engine.TestDescriptor;
 import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.launcher.TestExecutionListener;
@@ -14,7 +42,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 
 public class AllureTestListener implements TestExecutionListener {
     private final AllureLifecycle lifecycle = Allure.getLifecycle();
@@ -48,20 +75,9 @@ public class AllureTestListener implements TestExecutionListener {
                                 testMethod.getAnnotations()
                         );
 
-                        // Generate a unique ID for the test (Allure uses uuid)
-                        String uuid = UUID.randomUUID().toString();
-                        testMethodInfoMap.put(uuid, info);
-
-                        // Start the test in Allure lifecycle
-                        TestResult testResult = new TestResult()
-                                .setUuid(uuid)
-                                .setName(methodName)
-                                .setFullName(info.packageName + "." + info.className + "." + info.methodName);
-                        lifecycle.scheduleTestCase(testResult);
-                        lifecycle.startTestCase(uuid);
-
-                        // Add method info as parameters (or custom fields)
-                        addMethodInfoToTestResult(uuid, info);
+                        // Store the info with a key tied to the test identifier
+                        String uniqueId = testIdentifier.getUniqueId();
+                        testMethodInfoMap.put(uniqueId, info);
                     }
                 }
             } catch (ClassNotFoundException e) {
@@ -73,49 +89,30 @@ public class AllureTestListener implements TestExecutionListener {
     @Override
     public void executionFinished(TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
         if (testIdentifier.isTest()) {
-            String uuid = getUuidForTest(testIdentifier);
-            if (uuid != null) {
-                // Update test result status
-                lifecycle.updateTestCase(uuid, result -> {
-                    switch (testExecutionResult.getStatus()) {
-                        case SUCCESSFUL:
-                            result.setStatus(io.qameta.allure.model.Status.PASSED);
-                            break;
-                        case FAILED:
-                            result.setStatus(io.qameta.allure.model.Status.FAILED);
-                            break;
-                        case ABORTED:
-                            result.setStatus(io.qameta.allure.model.Status.SKIPPED);
-                            break;
-                    }
-                });
-                lifecycle.stopTestCase(uuid);
-                lifecycle.writeTestCase(uuid);
+            String uniqueId = testIdentifier.getUniqueId();
+            TestMethodInfo info = testMethodInfoMap.get(uniqueId);
+
+            if (info != null) {
+                // Get the current Allure test result UUID
+                String uuid = lifecycle.getCurrentTestCase().orElse(null);
+                if (uuid != null) {
+                    // Update the existing Allure test result with method info
+                    lifecycle.updateTestCase(uuid, result -> {
+                        result.getParameters().add(new Parameter().setName("packageName").setValue(info.packageName));
+                        result.getParameters().add(new Parameter().setName("className").setValue(info.className));
+                        result.getParameters().add(new Parameter().setName("methodName").setValue(info.methodName));
+
+                        // Add annotations
+                        for (Annotation annotation : info.annotations) {
+                            String annotationName = annotation.annotationType().getSimpleName();
+                            result.getParameters().add(new Parameter()
+                                    .setName("annotation_" + annotationName)
+                                    .setValue(annotation.toString()));
+                        }
+                    });
+                }
             }
         }
-    }
-
-    private void addMethodInfoToTestResult(String uuid, TestMethodInfo info) {
-        lifecycle.updateTestCase(uuid, result -> {
-            result.getParameters().add(new Parameter().setName("packageName").setValue(info.packageName));
-            result.getParameters().add(new Parameter().setName("className").setValue(info.className));
-            result.getParameters().add(new Parameter().setName("methodName").setValue(info.methodName));
-            
-            // Add annotations
-            for (Annotation annotation : info.annotations) {
-                String annotationName = annotation.annotationType().getSimpleName();
-                result.getParameters().add(new Parameter()
-                        .setName("annotation_" + annotationName)
-                        .setValue(annotation.toString()));
-            }
-        });
-    }
-
-    private String getUuidForTest(TestIdentifier testIdentifier) {
-        return testMethodInfoMap.keySet().stream()
-                .filter(uuid -> testMethodInfoMap.get(uuid).methodName.equals(testIdentifier.getDisplayName()))
-                .findFirst()
-                .orElse(null);
     }
 
     // Helper class to store test method information
@@ -134,7 +131,6 @@ public class AllureTestListener implements TestExecutionListener {
     }
 }
 
-
 package com.example;
 
 import org.gradle.api.Plugin;
@@ -147,9 +143,11 @@ public class MyAllurePlugin implements Plugin<Project> {
         // Apply the Allure plugin
         project.getPlugins().apply("io.qameta.allure");
 
-        // Configure the test task to use the custom listener
+        // Register the listener with the test task
         project.getTasks().withType(Test.class).configureEach(test -> {
             test.getTestListeners().add(new AllureTestListener());
         });
     }
 }
+
+
